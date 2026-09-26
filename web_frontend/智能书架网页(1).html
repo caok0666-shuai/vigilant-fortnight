@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能书架管理系统与书评终端</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome 图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12">
+
+  <!-- 顶栏导航 -->
+  <header class="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <i class="fa-solid fa-book-bookmark text-2xl"></i>
+        <h1 class="text-xl font-bold tracking-wide">智能书架系统终端</h1>
+      </div>
+      <div class="text-xs bg-indigo-700 px-3 py-1.5 rounded-full text-indigo-100 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        数据服务正常运行中
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 mt-6 space-y-8">
+
+    <!-- 顶栏：统计卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">藏书总数</p>
+          <h3 class="text-2xl font-bold text-slate-800" id="stat-total">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-book"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">在架图书</p>
+          <h3 class="text-2xl font-bold text-emerald-600" id="stat-onshelf">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">借出图书</p>
+          <h3 class="text-2xl font-bold text-amber-600" id="stat-borrowed">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-hand-holding-hand"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">累计书评</p>
+          <h3 class="text-2xl font-bold text-purple-600" id="stat-reviews">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-comments"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模块一：图书录入 & 数据池 (单页6条，对接串口屏) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 录入/编辑表单 -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-fit">
+        <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center">
+          <i class="fa-solid fa-plus-circle text-indigo-600 mr-2"></i> 新增 / 编辑图书
+        </h2>
+        <form id="book-form" onsubmit="handleSaveBook(event)" class="space-y-4">
+          <input type="hidden" id="book-id">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">书名（建议 ≤ 15 字）</label>
+            <input type="text" id="book-title" maxlength="15" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="例：三体">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">作者</label>
+            <input type="text" id="book-author" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="例：刘慈欣">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">状态</label>
+              <select id="book-status" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white">
+                <option value="on_shelf">在架</option>
+                <option value="borrowed">已借出</option>
+              </select>
+            </div>
+            <div>
+              <!-- 修改点：分类改为下拉选框 -->
+              <label class="block text-xs font-semibold text-slate-600 mb-1">图书分类</label>
+              <select id="book-category" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white">
+                <option value="科幻">科幻</option>
+                <option value="文学">文学</option>
+                <option value="工学">工学</option>
+                <option value="历史">历史</option>
+                <option value="艺术">艺术</option>
+                <option value="哲学">哲学</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">架位</label>
+            <input type="text" id="book-location" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="例：A区3排">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">简介（建议 ≤ 200 字）</label>
+            <textarea id="book-intro" rows="3" maxlength="200" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="图书简介..."></textarea>
+          </div>
+          <div class="flex space-x-2 pt-2">
+            <button type="submit" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">保存图书</button>
+            <button type="button" onclick="resetBookForm()" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50">重置</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- 图书数据列表 (增加了分类列与简介展开功能) -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-slate-800 flex items-center">
+            <i class="fa-solid fa-list text-indigo-600 mr-2"></i> 图书数据池 (串口屏 6 行/页)
+          </h2>
+          <div class="flex items-center space-x-2">
+            <select id="filter-status" onchange="renderAdminBooks()" class="text-xs border px-2 py-1 rounded-md bg-white">
+              <option value="all">全部状态</option>
+              <option value="on_shelf">只看在架</option>
+              <option value="borrowed">只看借出</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-slate-500 border-b">
+              <tr>
+                <th class="p-3">ID</th>
+                <th class="p-3">书名</th>
+                <th class="p-3">分类</th>
+                <th class="p-3">作者</th>
+                <th class="p-3">架位</th>
+                <th class="p-3">状态</th>
+                <th class="p-3 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="admin-book-list" class="divide-y">
+              <!-- 动态填充 -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 分页控件 -->
+        <div class="flex justify-between items-center mt-4 pt-3 border-t text-xs text-slate-500">
+          <span id="admin-page-info">第 1 / 1 页 (共 0 条)</span>
+          <div class="space-x-1">
+            <button onclick="changeAdminPage(-1)" class="px-3 py-1 border rounded hover:bg-slate-50">上一页</button>
+            <button onclick="changeAdminPage(1)" class="px-3 py-1 border rounded hover:bg-slate-50">下一页</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模块二：书评 / 留言墙模块 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 发表书评面板 -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-fit">
+        <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center">
+          <i class="fa-solid fa-pen-fancy text-purple-600 mr-2"></i> 发表书评 / 读后感
+        </h2>
+        <form id="review-form" onsubmit="handleSaveReview(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">选择图书</label>
+            <select id="review-book-select" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm bg-white">
+              <!-- 动态加载现有图书 -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">评分</label>
+            <select id="review-rating" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm bg-white">
+              <option value="5">⭐⭐⭐⭐⭐ 强烈推荐 (5星)</option>
+              <option value="4">⭐⭐⭐⭐ 值得一看 (4星)</option>
+              <option value="3">⭐⭐⭐ 一般 (3星)</option>
+              <option value="2">⭐⭐ 较差 (2星)</option>
+              <option value="1">⭐ 极其不推荐 (1星)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">评论者 / 读者名字</label>
+            <input type="text" id="review-author" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" placeholder="例：匿名读者">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">书评内容</label>
+            <textarea id="review-content" rows="3" maxlength="200" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" placeholder="写下你的心得体会..."></textarea>
+          </div>
+          <button type="submit" class="w-full bg-purple-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-purple-700 transition">提交书评</button>
+        </form>
+      </div>
+
+      <!-- 书评列表 (展示区) -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-slate-800 flex items-center">
+            <i class="fa-solid fa-comments text-purple-600 mr-2"></i> 读者感悟墙 & 书评列表
+          </h2>
+          <span class="text-xs text-slate-400">串口屏调取 /api/thoughts 显示</span>
+        </div>
+
+        <div id="review-list" class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+          <!-- 动态渲染书评卡片 -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let booksDB = [
+      { id: 1, title: "三体", author: "刘慈欣", status: "on_shelf", location: "A区1排", category: "科幻", intro: "文化大革命期间，红岸工程取得了突破性进展..." },
+      { id: 2, title: "活着", author: "余华", status: "borrowed", location: "B区2排", category: "文学", intro: "讲述了农村人福贵悲欢离合的一生..." },
+      { id: 3, title: "百年孤独", author: "马尔克斯", status: "on_shelf", location: "B区3排", category: "文学", intro: "加西亚·马尔克斯代表作，魔幻现实主义..." },
+      { id: 4, title: "计算机网络", author: "谢希仁", status: "on_shelf", location: "C区1排", category: "工学", intro: "经典计算机网络教材，全面介绍计算机网络基本原理..." },
+      { id: 5, title: "深入理解计算机系统", author: "Randal", status: "borrowed", location: "C区2排", category: "工学", intro: "理解计算机软硬件核心交互过程..." },
+      { id: 6, title: "人类简史", author: "赫拉利", status: "on_shelf", location: "D区1排", category: "历史", intro: "从认知革命、农业革命到科学革命..." }
+    ];
+
+    let reviewsDB = [
+      { id: 1, bookTitle: "三体", reviewer: "科幻迷", rating: 5, content: "给岁月以文明，而不是给文明以岁月！震撼人心！", time: "2026-09-10" },
+      { id: 2, bookTitle: "活着", reviewer: "小明", rating: 5, content: "人是为活着本身而活着的，而不是为了活着之外的任何事物而活着。", time: "2026-09-11" }
+    ];
+
+    let adminPage = 1;
+    const pageSize = 6;
+
+    window.onload = () => {
+      renderAdminBooks();
+      renderBookOptions();
+      renderReviews();
+      updateStats();
+    };
+
+    function updateStats() {
+      document.getElementById('stat-total').innerText = booksDB.length;
+      document.getElementById('stat-onshelf').innerText = booksDB.filter(b => b.status === 'on_shelf').length;
+      document.getElementById('stat-borrowed').innerText = booksDB.filter(b => b.status === 'borrowed').length;
+      document.getElementById('stat-reviews').innerText = reviewsDB.length;
+    }
+
+    // ----------------------------------------------------
+    // 图书管理逻辑 (新增显示分类与简介展开)
+    // ----------------------------------------------------
+    function renderAdminBooks() {
+      const filter = document.getElementById('filter-status').value;
+      let filtered = booksDB;
+      if (filter !== 'all') {
+        filtered = booksDB.filter(b => b.status === filter);
+      }
+
+      const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+      if (adminPage > totalPages) adminPage = totalPages;
+
+      const start = (adminPage - 1) * pageSize;
+      const pageData = filtered.slice(start, start + pageSize);
+
+      const tbody = document.getElementById('admin-book-list');
+      tbody.innerHTML = '';
+
+      if (pageData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">暂无图书数据</td></tr>`;
+      } else {
+        pageData.forEach(book => {
+          const statusBadge = book.status === 'on_shelf' 
+            ? `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs">在架</span>`
+            : `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs">已借出</span>`;
+
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-50 border-b border-slate-100">
+              <td class="p-3 font-mono text-xs text-slate-400">${book.id}</td>
+              <td class="p-3 font-bold text-slate-800">${book.title}</td>
+              <td class="p-3 text-slate-600"><span class="bg-slate-100 px-2 py-0.5 rounded text-xs">${book.category || '未分类'}</span></td>
+              <td class="p-3 text-slate-600">${book.author}</td>
+              <td class="p-3 text-slate-500">${book.location}</td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3 text-right space-x-2">
+                <button onclick="toggleIntro(${book.id})" class="text-slate-500 hover:text-indigo-600 font-medium text-xs"><i class="fa-solid fa-eye mr-1"></i>简介</button>
+                <button onclick="editBook(${book.id})" class="text-indigo-600 hover:text-indigo-900 font-medium text-xs">编辑</button>
+                <button onclick="deleteBook(${book.id})" class="text-rose-600 hover:text-rose-900 font-medium text-xs">删除</button>
+              </td>
+            </tr>
+            <!-- 展开的简介子行 -->
+            <tr id="intro-row-${book.id}" class="hidden bg-slate-50/80">
+              <td colspan="7" class="p-3 pl-8 text-xs text-slate-600 italic border-b">
+                <i class="fa-solid fa-quote-left text-indigo-300 mr-2"></i>${book.intro || '暂无详细简介'}
+              </td>
+            </tr>
+          `;
+        });
+      }
+
+      document.getElementById('admin-page-info').innerText = `第 ${adminPage} / ${totalPages} 页 (共 ${filtered.length} 条)`;
+    }
+
+    // 展开/收起简介
+    function toggleIntro(id) {
+      const row = document.getElementById(`intro-row-${id}`);
+      if (row) {
+        row.classList.toggle('hidden');
+      }
+    }
+
+    function changeAdminPage(delta) {
+      adminPage += delta;
+      if (adminPage < 1) adminPage = 1;
+      renderAdminBooks();
+    }
+
+    function handleSaveBook(e) {
+      e.preventDefault();
+      const id = document.getElementById('book-id').value;
+      const title = document.getElementById('book-title').value.trim();
+      const author = document.getElementById('book-author').value.trim();
+      const status = document.getElementById('book-status').value;
+      const category = document.getElementById('book-category').value; // 下拉菜单取值
+      const location = document.getElementById('book-location').value.trim();
+      const intro = document.getElementById('book-intro').value.trim();
+
+      if (id) {
+        const index = booksDB.findIndex(b => b.id == id);
+        if (index !== -1) {
+          booksDB[index] = { id: Number(id), title, author, status, category, location, intro };
+        }
+      } else {
+        const newId = booksDB.length > 0 ? Math.max(...booksDB.map(b => b.id)) + 1 : 1;
+        booksDB.unshift({ id: newId, title, author, status, category, location, intro });
+      }
+
+      resetBookForm();
+      renderAdminBooks();
+      renderBookOptions();
+      updateStats();
+      alert('图书信息保存成功！');
+    }
+
+    function editBook(id) {
+      const book = booksDB.find(b => b.id === id);
+      if (!book) return;
+      document.getElementById('book-id').value = book.id;
+      document.getElementById('book-title').value = book.title;
+      document.getElementById('book-author').value = book.author;
+      document.getElementById('book-status').value = book.status;
+      document.getElementById('book-category').value = book.category || '科幻';
+      document.getElementById('book-location').value = book.location || '';
+      document.getElementById('book-intro').value = book.intro || '';
+    }
+
+    function resetBookForm() {
+      document.getElementById('book-id').value = '';
+      document.getElementById('book-form').reset();
+    }
+
+    function deleteBook(id) {
+      if (confirm(`确定删除 ID=${id} 的图书吗？`)) {
+        booksDB = booksDB.filter(b => b.id !== id);
+        renderAdminBooks();
+        renderBookOptions();
+        updateStats();
+      }
+    }
+
+    // ----------------------------------------------------
+    // 书评模块逻辑
+    // ----------------------------------------------------
+    function renderBookOptions() {
+      const select = document.getElementById('review-book-select');
+      select.innerHTML = '';
+      booksDB.forEach(book => {
+        select.innerHTML += `<option value="${book.title}">《${book.title}》 - ${book.author}</option>`;
+      });
+    }
+
+    function handleSaveReview(e) {
+      e.preventDefault();
+      const bookTitle = document.getElementById('review-book-select').value;
+      const rating = Number(document.getElementById('review-rating').value);
+      const reviewer = document.getElementById('review-author').value.trim();
+      const content = document.getElementById('review-content').value.trim();
+
+      const newReview = {
+        id: reviewsDB.length + 1,
+        bookTitle,
+        reviewer,
+        rating,
+        content,
+        time: new Date().toISOString().split('T')[0]
+      };
+
+      reviewsDB.unshift(newReview);
+      renderReviews();
+      updateStats();
+
+      document.getElementById('review-author').value = '';
+      document.getElementById('review-content').value = '';
+      alert('书评提交成功！');
+    }
+
+    function renderReviews() {
+      const container = document.getElementById('review-list');
+      container.innerHTML = '';
+
+      if (reviewsDB.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-slate-400">暂无读者书评</div>`;
+        return;
+      }
+
+      reviewsDB.forEach(rev => {
+        const stars = '⭐'.repeat(rev.rating);
+        container.innerHTML += `
+          <div class="p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-purple-50/30 transition space-y-1">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-sm text-purple-900">《${rev.bookTitle}》</span>
+              <span class="text-xs text-amber-500">${stars}</span>
+            </div>
+            <p class="text-xs text-slate-700 leading-relaxed">${rev.content}</p>
+            <div class="flex justify-between items-center text-[11px] text-slate-400 pt-1">
+              <span>读者: <strong class="text-slate-600">${rev.reviewer}</strong></span>
+              <span>${rev.time}</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>

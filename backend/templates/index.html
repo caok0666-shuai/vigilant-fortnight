@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能书架管理系统与读者终端</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome 图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* 书名最多两行，超出省略 */
+    .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .fade-in { animation: fadeIn .18s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12">
+
+  <!-- ============================================================
+       登录界面：未登录时覆盖整页，登录成功后隐藏
+       ============================================================ -->
+  <div id="login-screen" class="fixed inset-0 z-[100] bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-7">
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-indigo-200">
+          <i class="fa-solid fa-book-bookmark"></i>
+        </div>
+        <h1 class="mt-4 text-xl font-bold text-slate-800">智能书架管理系统</h1>
+        <p class="text-xs text-slate-500 mt-1">社区智能书架 · 读者登录</p>
+      </div>
+
+      <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label for="login-name" class="block text-xs font-semibold text-slate-600 mb-1">读者姓名</label>
+          <input id="login-name" type="text" required maxlength="12" autofocus placeholder="例：李同学"
+            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+        </div>
+        <div>
+          <label for="login-pass" class="block text-xs font-semibold text-slate-600 mb-1">借阅密码</label>
+          <input id="login-pass" type="password" required placeholder="演示密码：123456"
+            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+        </div>
+        <p id="login-error" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2"></p>
+        <button type="submit" class="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
+          <i class="fa-solid fa-right-to-bracket mr-1"></i> 登录进入书架
+        </button>
+      </form>
+
+      <p class="text-[11px] text-slate-400 text-center mt-4">演示账号：任意姓名 + 密码 123456</p>
+    </div>
+  </div>
+
+  <!-- 顶栏导航 -->
+  <header class="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <i class="fa-solid fa-book-bookmark text-2xl"></i>
+        <h1 class="text-xl font-bold tracking-wide">智能书架系统终端</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <div id="user-chip" style="display:none" class="text-xs bg-indigo-700 px-3 py-1.5 rounded-full text-indigo-100 items-center gap-2">
+          <i class="fa-solid fa-circle-user"></i>
+          <span id="user-name">读者</span>
+          <button onclick="logout()" title="退出登录" class="text-indigo-300 hover:text-white transition">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+        <div id="api-status" class="text-xs bg-indigo-700 px-3 py-1.5 rounded-full text-indigo-100 flex items-center gap-2">
+          <span id="api-dot" class="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span>
+          <span id="api-status-text">API 服务连接中 (每3s自动同步)</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 mt-6 space-y-8">
+
+    <!-- 顶栏：统计卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">藏书总数</p>
+          <h3 class="text-2xl font-bold text-slate-800" id="stat-total">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-book"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">在架图书</p>
+          <h3 class="text-2xl font-bold text-emerald-600" id="stat-onshelf">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">借出图书</p>
+          <h3 class="text-2xl font-bold text-amber-600" id="stat-borrowed">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-hand-holding-hand"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-sm text-slate-500">借还记录数</p>
+          <h3 class="text-2xl font-bold text-purple-600" id="stat-records">0</h3>
+        </div>
+        <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模块一：馆藏书架（卡片墙，一排 4 本，点击任意一本查看详情） -->
+    <section class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center">
+          <i class="fa-solid fa-book-open text-indigo-600 mr-2"></i> 馆藏书架
+          <span class="ml-2 text-xs font-normal text-slate-400">点击任意一本书，查看借阅信息、简介与读者评论</span>
+        </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+            <input id="shelf-search" oninput="renderShelf()" type="search" placeholder="搜索书名或作者"
+              class="w-40 sm:w-56 pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <select id="shelf-filter-status" onchange="renderShelf()" class="text-xs border border-slate-200 px-2 py-1.5 rounded-lg bg-white outline-none">
+            <option value="all">全部状态</option>
+            <option value="in">只看在架</option>
+            <option value="out">只看借出</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 卡片网格：大屏一排 4 本 -->
+      <div id="book-shelf" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"></div>
+    </section>
+
+    <!-- 模块二：图书数据列表 + 借还记录 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- 图书数据列表 (对应 GET /api/books) -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-slate-800 flex items-center">
+            <i class="fa-solid fa-list text-indigo-600 mr-2"></i> 图书数据列表
+          </h2>
+          <div class="flex items-center space-x-2">
+            <select id="filter-status" onchange="renderBooksTable()" class="text-xs border px-2 py-1 rounded-md bg-white">
+              <option value="all">全部状态</option>
+              <option value="in">只看在架</option>
+              <option value="out">只看借出</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-slate-500 border-b">
+              <tr>
+                <th class="p-3">UID</th>
+                <th class="p-3">书名</th>
+                <th class="p-3">作者</th>
+                <th class="p-3">状态</th>
+                <th class="p-3">最近借出/操作时间</th>
+                <th class="p-3 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="book-list" class="divide-y">
+              <!-- 动态加载 -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 分页控件 -->
+        <div class="flex justify-between items-center mt-4 pt-3 border-t text-xs text-slate-500">
+          <span id="page-info">第 1 / 1 页 (共 0 条)</span>
+          <div class="space-x-1">
+            <button onclick="changePage(-1)" class="px-3 py-1 border rounded hover:bg-slate-50">上一页</button>
+            <button onclick="changePage(1)" class="px-3 py-1 border rounded hover:bg-slate-50">下一页</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 借还历史记录 (对应 GET /api/records) -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-fit">
+        <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center justify-between">
+          <span><i class="fa-solid fa-history text-indigo-600 mr-2"></i> 借还动态日志</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400 font-normal">最近50条</span>
+            <select id="filter-record" onchange="renderRecordsList()" class="text-xs border px-2 py-1 rounded-md bg-white text-slate-600 font-normal">
+              <option value="all">全部</option>
+              <option value="borrow">只看借出</option>
+              <option value="return">只看归还</option>
+            </select>
+          </div>
+        </h2>
+        <div id="records-list" class="space-y-3 max-h-[420px] overflow-y-auto pr-1 text-xs">
+          <!-- 动态加载 -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 发表感悟 / 读者评论已合并进「图书详情」弹窗（点任意一本书即可查看与发表） -->
+
+  </main>
+
+  <!-- ============================================================
+       图书详情弹窗：借阅信息 + 借还记录 + 内容简介 + 读者评论
+       ============================================================ -->
+  <div id="book-detail" class="hidden fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
+    <div class="max-w-3xl mx-auto my-6 sm:my-10 bg-white rounded-2xl shadow-2xl overflow-hidden fade-in">
+      <!-- 头部封面：书名 / 作者 / 状态 -->
+      <div id="detail-cover" class="relative h-36 sm:h-44 flex flex-col items-center justify-center px-14 text-center">
+        <button onclick="closeBookDetail()" aria-label="关闭"
+          class="absolute right-3 top-3 w-8 h-8 rounded-full bg-white/90 text-slate-600 hover:text-rose-600 flex items-center justify-center shadow">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+        <h2 id="detail-title" class="text-white text-2xl font-bold leading-snug drop-shadow"></h2>
+        <p id="detail-subtitle" class="text-white/85 text-xs mt-2"></p>
+        <div id="detail-status" class="mt-3"></div>
+      </div>
+
+      <div class="p-6 space-y-6">
+        <!-- 借阅信息 -->
+        <div>
+          <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center">
+            <i class="fa-solid fa-hand-holding-hand text-indigo-500 mr-2"></i> 借阅信息
+          </h3>
+          <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+            <div><dt class="text-xs text-slate-400 mb-0.5">图书 UID</dt><dd id="detail-uid" class="text-slate-700 font-medium font-mono text-xs"></dd></div>
+            <div><dt class="text-xs text-slate-400 mb-0.5">作者</dt><dd id="detail-author" class="text-slate-700 font-medium"></dd></div>
+            <div><dt class="text-xs text-slate-400 mb-0.5">当前状态</dt><dd id="detail-status-text" class="text-slate-700 font-medium"></dd></div>
+            <div><dt class="text-xs text-slate-400 mb-0.5">借出时间</dt><dd id="detail-borrow-time" class="text-slate-700 font-medium"></dd></div>
+            <div><dt class="text-xs text-slate-400 mb-0.5">应还日期（按14天借期估算）</dt><dd id="detail-due-date" class="text-slate-700 font-medium"></dd></div>
+            <div><dt class="text-xs text-slate-400 mb-0.5">最近一次借还操作</dt><dd id="detail-last-action" class="text-slate-700 font-medium"></dd></div>
+          </dl>
+          <p id="detail-overdue" class="hidden mt-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2"></p>
+        </div>
+
+        <!-- 这本书的借还记录（来自 GET /api/records） -->
+        <div>
+          <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center">
+            <i class="fa-solid fa-clock-rotate-left text-indigo-500 mr-2"></i> 借还记录
+            <span id="detail-record-count" class="ml-2 text-xs font-normal text-slate-400"></span>
+          </h3>
+          <div id="detail-records" class="space-y-2 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- 内容简介 -->
+        <div>
+          <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center">
+            <i class="fa-solid fa-quote-left text-indigo-500 mr-2"></i> 内容简介
+          </h3>
+          <p id="detail-intro" class="text-sm text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-4"></p>
+        </div>
+
+        <!-- 读者评论（来自 GET /api/thoughts，提交走 POST /api/thoughts） -->
+        <div>
+          <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center">
+            <i class="fa-solid fa-comments text-purple-600 mr-2"></i> 读者评论
+            <span id="detail-review-count" class="ml-2 text-xs font-normal text-slate-400"></span>
+          </h3>
+          <div id="detail-reviews" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
+
+          <form onsubmit="handleDetailReview(event)" class="mt-4 pt-4 border-t border-slate-100 space-y-2">
+            <p class="text-[11px] text-slate-400">以 <strong id="detail-reviewer-name" class="text-slate-600">读者</strong> 的名义发表评论</p>
+            <textarea id="detail-review-text" rows="3" maxlength="200" required placeholder="写下你对这本书的评论..."
+              class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"></textarea>
+            <button type="submit" class="w-full bg-purple-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-purple-700 transition">
+              发表评论
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "/api";
+
+    if (location.protocol === "file:") {
+      console.warn(
+        "[书架] 当前以本地文件方式打开（file://），/api/... 请求不会发到队长电脑。\n" +
+        "请改用 http://队长的IP/index2.html 访问，或把 API_BASE 改成绝对地址。"
+      );
+    }
+
+    // 全局数据缓存
+    let globalBooks = [];
+    let globalRecords = [];
+    let globalReviews = [];
+    let recordsAvailable = null;   // null=未知, false=后端没有该接口
+    let reviewsAvailable = null;
+    let booksLoaded = false;       // /api/books 是否已经返回过结果
+
+    let currentPage = 1;
+    const pageSize = 6;
+
+    // 登录 / 详情弹窗相关状态
+    const SESSION_KEY = 'shelf_user';   // 登录信息存放位置（sessionStorage）
+    const DEMO_PASSWORD = '123456';     // 演示用借阅密码
+    const BORROW_DAYS = 14;             // 借期，用于估算应还日期
+    let currentUser = null;             // { name, loginAt }
+    let currentDetailUid = null;        // 当前打开详情的图书 uid
+
+    // 后端数据结构（已对照 library.db 核实）：
+    //   books    { uid, title, author, status: "in" | "out", borrow_time, return_time }
+    //   records  { id, uid, action: "borrow" | "return", time }   ← 没有书名，靠 uid 关联
+    //   thoughts { id, book, text, time }
+
+    // 列表接口的包裹方式还可能变（裸数组 / {code,data:{list}} / {list}），这里统一取出
+    const listOf = res => Array.isArray(res) ? res
+      : (res && res.data && Array.isArray(res.data.list)) ? res.data.list
+      : (res && Array.isArray(res.list)) ? res.list
+      : [];
+
+    // ----------------------------------------------------
+    // 通用工具
+    // ----------------------------------------------------
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function hashOf(key) {
+      const s = String(key || '');
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 1000000;
+      return h;
+    }
+
+    // 封面渐变色板，按书名取色，保证同一本书颜色固定
+    const COVER_THEMES = [
+      ['#6366f1', '#8b5cf6'], ['#0ea5e9', '#22d3ee'], ['#f59e0b', '#ef4444'],
+      ['#10b981', '#14b8a6'], ['#8b5cf6', '#ec4899'], ['#f43f5e', '#f97316'],
+      ['#3b82f6', '#1e40af'], ['#64748b', '#334155']
+    ];
+
+    function coverOf(book) {
+      return COVER_THEMES[hashOf(book.title) % COVER_THEMES.length];
+    }
+
+    function todayStr() {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    function addDays(dateStr, days) {
+      const d = new Date(dateStr + 'T00:00:00');
+      d.setDate(d.getDate() + days);
+      return d.toISOString().split('T')[0];
+    }
+
+    // 逾期天数，未逾期返回 0
+    function overdueDays(dueDate) {
+      if (!dueDate) return 0;
+      const diff = Math.floor((new Date(todayStr() + 'T00:00:00') - new Date(dueDate + 'T00:00:00')) / 86400000);
+      return diff > 0 ? diff : 0;
+    }
+
+    // 后端 books 表目前没有简介字段：后端返回 intro/description 时优先用后端的，
+    // 否则用这份按书名匹配的兜底文案，都没有就提示暂无简介。
+    const INTRO_FALLBACK = {
+      "毛泽东选集第一卷": "收录第一次国内革命战争时期的重要著作，集中体现对中国社会各阶级的分析方法，是理解革命战略问题的入门篇。",
+      "毛泽东选集第二卷": "收录抗日战争时期的重要著作，围绕统一战线、持久战与游击战争展开，是全书篇幅最大的一卷。",
+      "毛泽东选集第三卷": "收录抗日战争后期的重要著作，《论联合政府》《改造我们的学习》等名篇都在这一卷。",
+      "毛泽东选集第四卷": "收录解放战争时期的重要著作，涉及战略决战、土地改革与革命胜利后的建国构想。",
+      "三体": "文化大革命期间，红岸工程向宇宙发出信号，由此引出三体文明与人类文明的漫长博弈。黑暗森林法则、面壁计划、降维打击等设定层层展开。",
+      "活着": "讲述农村人福贵悲欢离合的一生：从地主少爷到一无所有，亲人相继离去，最后只剩一头老牛相伴。活着本身，就是最大的坚韧。",
+      "百年孤独": "加西亚·马尔克斯的代表作，魔幻现实主义的巅峰。布恩迪亚家族七代人的兴衰，折射出整个拉丁美洲的百年历史与孤独。",
+      "计算机网络": "国内经典计算机网络教材，按物理层到应用层逐层讲解网络体系结构，涵盖 TCP/IP、路由选择、拥塞控制等核心原理。",
+      "深入理解计算机系统": "从程序员的视角讲解计算机系统：信息表示、汇编、处理器体系结构、存储层次、链接、并发与网络编程，是理解软硬件交互的必读书。",
+      "人类简史": "从认知革命、农业革命到科学革命，梳理智人如何从非洲一隅走向地球主宰，并追问：我们是否因此变得更幸福？"
+    };
+
+    function introOf(book) {
+      const fromApi = book.intro || book.description || book.summary || '';
+      if (fromApi) return fromApi;
+      return INTRO_FALLBACK[String(book.title || '').trim()] || '';
+    }
+
+    // 这本书的借还记录（records 里靠 uid 关联）
+    function recordsOf(uid) {
+      return globalRecords
+        .filter(rec => String(rec.uid) === String(uid))
+        .sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
+    }
+
+    function lastRecordOf(uid) {
+      const list = recordsOf(uid);
+      return list.length ? list[0] : null;
+    }
+
+    // 这本书的读者感悟（thoughts 里存的是书名）
+    function reviewsOf(title) {
+      const t = String(title || '');
+      return globalReviews.filter(rev => String(rev.book || rev.bookTitle || '') === t);
+    }
+
+    // 已借出的书：按借出时间 + 借期估算应还日期；后端没有借出时间就用最近一次借出记录
+    function dueDateOf(book) {
+      if (book.status !== 'out') return '';
+      let base = book.borrow_time || '';
+      if (!base) {
+        const rec = lastRecordOf(book.uid);
+        if (rec && rec.action === 'borrow') base = rec.time || '';
+      }
+      if (!base) return '';
+      return addDays(String(base).slice(0, 10), BORROW_DAYS);
+    }
+
+    // 页面加载完成后触发
+    document.addEventListener("DOMContentLoaded", () => {
+      // 登录门禁：已登录直接进入，未登录只显示登录界面
+      currentUser = readSession();
+      if (currentUser) {
+        enterApp();
+      } else {
+        document.body.style.overflow = 'hidden';
+      }
+
+      // ESC 关闭详情弹窗；点遮罩空白处也关闭
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && currentDetailUid !== null) closeBookDetail();
+      });
+      document.getElementById('book-detail').addEventListener('click', function (e) {
+        if (e.target === this) closeBookDetail();
+      });
+
+      // 卡片和表格里的“详情”统一用事件委托，避免把 uid 拼进 HTML
+      document.body.addEventListener('click', function (ev) {
+        const hit = ev.target.closest('[data-uid]');
+        if (hit) openBookDetail(hit.getAttribute('data-uid'));
+      });
+      document.body.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        const hit = ev.target.closest('[data-uid]');
+        if (hit) { ev.preventDefault(); openBookDetail(hit.getAttribute('data-uid')); }
+      });
+
+      fetchAllData();
+      
+      // 2.定时刷新（每 3 秒刷新一次数据）
+      setInterval(fetchAllData, 3000);
+    });
+
+    // ----------------------------------------------------
+    // 登录 / 退出（登录信息只存在浏览器，不占用后端接口）
+    // ----------------------------------------------------
+    // 直接双击打开（file://）时个别浏览器会禁用 sessionStorage，这里统一兜底
+    function safeGet(key) {
+      try { return sessionStorage.getItem(key); } catch (e) { return null; }
+    }
+    function safeSet(key, val) {
+      try { sessionStorage.setItem(key, val); } catch (e) { /* 忽略 */ }
+    }
+    function safeRemove(key) {
+      try { sessionStorage.removeItem(key); } catch (e) { /* 忽略 */ }
+    }
+
+    function readSession() {
+      const raw = safeGet(SESSION_KEY);
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+
+    function showLoginError(msg) {
+      const err = document.getElementById('login-error');
+      err.textContent = msg;
+      err.classList.remove('hidden');
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const name = document.getElementById('login-name').value.trim();
+      const pass = document.getElementById('login-pass').value;
+
+      if (!name) { showLoginError('请输入读者姓名'); return; }
+      if (pass !== DEMO_PASSWORD) { showLoginError('借阅密码不正确（演示密码：123456）'); return; }
+
+      currentUser = { name: name, loginAt: new Date().toLocaleString('zh-CN') };
+      safeSet(SESSION_KEY, JSON.stringify(currentUser));
+      document.getElementById('login-error').classList.add('hidden');
+      enterApp();
+    }
+
+    // 登录成功：隐藏登录页、显示读者信息、刷新当前数据
+    function enterApp() {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.body.style.overflow = '';
+
+      const chip = document.getElementById('user-chip');
+      document.getElementById('user-name').textContent = currentUser ? currentUser.name : '读者';
+      chip.style.display = 'flex';
+      document.getElementById('detail-reviewer-name').textContent = currentUser ? currentUser.name : '读者';
+
+      renderShelf();
+      if (currentDetailUid !== null) renderBookDetail();
+    }
+
+    function logout() {
+      safeRemove(SESSION_KEY);
+      currentUser = null;
+      location.reload();
+    }
+
+    // 联合加载数据接口
+    async function fetchAllData() {
+      // 先取图书：records 里只有 uid，没有书名，要拿它反查标题
+      await loadBooks();
+      await Promise.all([
+        loadRecords(),
+        loadReviews()
+      ]);
+      renderBooksTable();   // 记录到齐后，回填“最近借出/操作时间”
+      renderShelf();        // 卡片墙同步刷新
+      updateStats();
+      if (currentDetailUid !== null) renderBookDetail();   // 弹窗开着就一起刷新
+    }
+
+    // 顶栏连接状态，用来判断“到底有没有连上队长电脑”
+    function markApiStatus(connected, detail) {
+      const dot = document.getElementById("api-dot");
+      const txt = document.getElementById("api-status-text");
+      if (!dot || !txt) return;
+      if (connected) {
+        dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+        txt.textContent = "已连接后端 · 每3s同步";
+      } else {
+        dot.className = "w-2 h-2 rounded-full bg-rose-400";
+        txt.textContent = "未连接后端" + (detail ? "（" + detail + "）" : "") + " · 请确认用 http:// 打开";
+      }
+    }
+
+    // ----------------------------------------------------
+    // API 1: 获取图书列表 (GET /api/books)
+    // ----------------------------------------------------
+    async function loadBooks() {
+      try {
+        const res = await fetch(API_BASE + "/books");
+        if (!res.ok) {
+          console.warn("[书架] /api/books 返回状态码", res.status);
+          markApiStatus(false, "books " + res.status);
+          booksLoaded = true;
+          renderShelf();
+          return;
+        }
+        const raw = await res.json();
+        console.log("[书架] /api/books 原始返回:", raw);
+        globalBooks = listOf(raw);
+        booksLoaded = true;
+        markApiStatus(true);
+        
+        renderBooksTable();
+      } catch (err) {
+        console.error("加载图书失败:", err);
+        markApiStatus(false, err.message);
+        booksLoaded = true;
+        renderShelf();
+      }
+    }
+
+    // ----------------------------------------------------
+    // API 2: 获取借还记录 (GET /api/records)
+    // ----------------------------------------------------
+    async function loadRecords() {
+      try {
+        const res = await fetch(API_BASE + "/records");
+        if (!res.ok) {
+          // 队长后端可能没做这个接口，不算致命错误，只把那一栏标出来
+          console.warn("[书架] /api/records 返回状态码", res.status, "（该接口可能未提供）");
+          recordsAvailable = false;
+          renderRecordsList();
+          return;
+        }
+        const records = await res.json();
+        console.log("[书架] /api/records 原始返回:", records);
+        
+        // 格式: [{uid, action, time, title}, ...]
+        recordsAvailable = true;
+        globalRecords = listOf(records);
+        renderRecordsList();
+      } catch (err) {
+        console.error("加载借还记录失败:", err);
+      }
+    }
+
+    // ----------------------------------------------------
+    // API 3: 获取读书感悟列表 (GET /api/thoughts)
+    // ----------------------------------------------------
+    async function loadReviews() {
+      try {
+        const res = await fetch(API_BASE + "/thoughts");
+        if (!res.ok) {
+          console.warn("[书架] GET /api/thoughts 返回状态码", res.status, "（该接口可能未提供）");
+          reviewsAvailable = false;
+          renderShelf();
+          if (currentDetailUid !== null) renderBookDetail();
+          return;
+        }
+        const reviews = await res.json();
+        reviewsAvailable = true;
+        globalReviews = listOf(reviews);
+        renderShelf();                                      // 卡片上的评论数
+        if (currentDetailUid !== null) renderBookDetail();   // 详情里的评论列表
+      } catch (err) {
+        console.error("加载感悟列表失败:", err);
+      }
+    }
+
+    // ----------------------------------------------------
+    // UI 渲染逻辑与辅助方法
+    // ----------------------------------------------------
+
+    // 取这本书最近一次借/还操作的时间（records 表里用 uid 关联）
+    function lastTimeOf(uid) {
+      let latest = null;
+      globalRecords.forEach(rec => {
+        if (String(rec.uid) !== String(uid)) return;
+        const t = rec.time || rec.created_at || rec.updated_at || "";
+        if (t && (!latest || t > latest)) latest = t;
+      });
+      return latest;
+    }
+
+    // ----------------------------------------------------
+    // 馆藏书架：卡片墙（一排 4 本），点击进入详情
+    // ----------------------------------------------------
+    function renderShelf() {
+      const grid = document.getElementById('book-shelf');
+      if (!grid) return;
+
+      const statusEl = document.getElementById('shelf-filter-status');
+      const searchEl = document.getElementById('shelf-search');
+      const status = statusEl ? statusEl.value : 'all';
+      const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+
+      let list = globalBooks.slice();
+      if (status !== 'all') list = list.filter(b => b.status === status);
+      if (q) {
+        list = list.filter(b =>
+          String(b.title || '').toLowerCase().indexOf(q) >= 0 ||
+          String(b.author || '').toLowerCase().indexOf(q) >= 0
+        );
+      }
+
+      if (globalBooks.length === 0) {
+        grid.innerHTML = `<div class="sm:col-span-2 lg:col-span-4 p-10 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+          ${booksLoaded ? '暂无图书数据，请确认后端 /api/books 是否可用' : '正在从后端加载图书数据…'}
+        </div>`;
+        return;
+      }
+      if (list.length === 0) {
+        grid.innerHTML = `<div class="sm:col-span-2 lg:col-span-4 p-10 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">没有符合条件的图书</div>`;
+        return;
+      }
+
+      grid.innerHTML = list.map(bookCard).join('');
+    }
+
+    // 单张卡片：外面显示书名、作者、借阅信息（状态 / 时间 / 估算应还 / 逾期）
+    function bookCard(b) {
+      const onShelf = b.status === 'in';
+      const c = coverOf(b);
+      const title = b.title || '未知书名';
+      const revCount = reviewsOf(title).length;
+      const last = lastRecordOf(b.uid);
+      const due = dueDateOf(b);
+      const overdue = overdueDays(due);
+
+      const statusBadge = onShelf
+        ? `<span class="inline-flex items-center gap-1 bg-emerald-500 text-white px-2 py-0.5 rounded-full text-[11px] font-semibold shadow-sm"><i class="fa-solid fa-circle-check"></i>在架</span>`
+        : `<span class="inline-flex items-center gap-1 bg-amber-500 text-white px-2 py-0.5 rounded-full text-[11px] font-semibold shadow-sm"><i class="fa-solid fa-hand-holding-hand"></i>已借出</span>`;
+
+      const borrowBox = onShelf
+        ? `<div class="rounded-lg bg-emerald-50 text-emerald-700 px-2.5 py-2 text-[11px] leading-relaxed">
+             <div><i class="fa-solid fa-circle-check mr-1"></i>在架可借</div>
+             ${last ? `<div><i class="fa-regular fa-clock mr-1"></i>最近${last.action === 'return' ? '归还' : '借出'}：${esc(String(last.time || '').slice(0, 16))}</div>` : ''}
+           </div>`
+        : `<div class="rounded-lg ${overdue ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'} px-2.5 py-2 text-[11px] leading-relaxed space-y-0.5">
+             <div><i class="fa-regular fa-calendar mr-1"></i>借出：${esc(String(b.borrow_time || (last && last.time) || '—').slice(0, 16))}</div>
+             <div><i class="fa-solid fa-hourglass-half mr-1"></i>应还（估算）：${esc(due || '—')}</div>
+             ${overdue ? `<div class="font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>已逾期 ${overdue} 天</div>` : ''}
+           </div>`;
+
+      return `
+        <div data-uid="${esc(String(b.uid))}" role="button" tabindex="0"
+             class="group cursor-pointer bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition flex flex-col">
+          <div class="h-28 relative flex items-center justify-center shrink-0" style="background-image: linear-gradient(135deg, ${c[0]}, ${c[1]})">
+            <span class="absolute left-3 top-3">${statusBadge}</span>
+            <i class="fa-solid fa-book text-white/80 text-4xl"></i>
+            <span class="absolute right-3 bottom-2 text-[11px] text-white/85">UID ${esc(String(b.uid || '-'))}</span>
+          </div>
+          <div class="p-4 flex-1 flex flex-col gap-2">
+            <h3 class="font-bold text-slate-800 leading-snug clamp-2 group-hover:text-indigo-600 transition">《${esc(title)}》</h3>
+            <p class="text-xs text-slate-500"><i class="fa-solid fa-user-pen mr-1 text-slate-400"></i>${esc(b.author || '未知作者')}</p>
+            ${borrowBox}
+            <div class="mt-auto flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-2">
+              <span><i class="fa-regular fa-comment-dots mr-1"></i>${revCount} 条评论</span>
+              <span class="text-indigo-600 font-medium">查看详情 <i class="fa-solid fa-angle-right"></i></span>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ----------------------------------------------------
+    // 图书详情弹窗（借阅信息 + 借还记录 + 简介 + 读者评论）
+    // ----------------------------------------------------
+    function bookOfUid(uid) {
+      return globalBooks.find(b => String(b.uid) === String(uid));
+    }
+
+    function openBookDetail(uid) {
+      currentDetailUid = uid;
+      document.getElementById('book-detail').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      renderBookDetail();
+    }
+
+    function closeBookDetail() {
+      currentDetailUid = null;
+      document.getElementById('book-detail').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    function renderBookDetail() {
+      const book = bookOfUid(currentDetailUid);
+      if (!book) { closeBookDetail(); return; }
+
+      const onShelf = book.status === 'in';
+      const c = coverOf(book);
+      const title = book.title || '未知书名';
+      const due = dueDateOf(book);
+      const overdue = overdueDays(due);
+      const last = lastRecordOf(book.uid);
+      const recs = recordsOf(book.uid);
+      const revs = reviewsOf(title);
+
+      // 头部
+      document.getElementById('detail-cover').style.backgroundImage = `linear-gradient(135deg, ${c[0]}, ${c[1]})`;
+      document.getElementById('detail-title').textContent = '《' + title + '》';
+      document.getElementById('detail-subtitle').textContent = (book.author || '未知作者') + ' · UID ' + (book.uid || '-');
+      document.getElementById('detail-status').innerHTML = onShelf
+        ? `<span class="inline-flex items-center gap-1.5 bg-white/95 text-emerald-700 px-3 py-1 rounded-full text-xs font-semibold"><i class="fa-solid fa-circle-check"></i>在架，可借阅</span>`
+        : `<span class="inline-flex items-center gap-1.5 bg-white/95 text-amber-700 px-3 py-1 rounded-full text-xs font-semibold"><i class="fa-solid fa-hand-holding-hand"></i>已借出</span>`;
+
+      // 借阅信息
+      document.getElementById('detail-uid').textContent = book.uid || '-';
+      document.getElementById('detail-author').textContent = book.author || '未知作者';
+      const statusTextEl = document.getElementById('detail-status-text');
+      statusTextEl.textContent = onShelf ? '在架，可借阅' : '已借出';
+      statusTextEl.className = 'font-medium ' + (onShelf ? 'text-emerald-600' : 'text-amber-600');
+      document.getElementById('detail-borrow-time').textContent =
+        book.borrow_time || (last && last.action === 'borrow' ? last.time : '') || '—';
+      document.getElementById('detail-due-date').textContent = onShelf ? '—' : (due || '—');
+      document.getElementById('detail-last-action').textContent =
+        last ? ((last.action === 'return' ? '归还 ' : '借出 ') + (last.time || '')) : '暂无记录';
+
+      const overdueEl = document.getElementById('detail-overdue');
+      if (!onShelf && overdue) {
+        overdueEl.textContent = `这本书已超期 ${overdue} 天（按 ${BORROW_DAYS} 天借期估算），请尽快归还。`;
+        overdueEl.classList.remove('hidden');
+      } else {
+        overdueEl.classList.add('hidden');
+      }
+
+      // 借还记录
+      document.getElementById('detail-record-count').textContent = recs.length ? `共 ${recs.length} 条` : '';
+      const recBox = document.getElementById('detail-records');
+      if (recs.length === 0) {
+        recBox.innerHTML = `<p class="text-slate-400 text-xs py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">${
+          recordsAvailable === false ? '后端未提供借还记录接口（/api/records）' : '这本书还没有借还记录'}</p>`;
+      } else {
+        recBox.innerHTML = recs.slice(0, 20).map(rec => {
+          const isReturn = rec.action === 'return';
+          return `
+            <div class="p-2.5 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-center gap-3">
+              <span class="${isReturn ? 'text-emerald-600' : 'text-amber-600'} font-semibold text-xs">${isReturn ? '归还' : '借出'}</span>
+              <span class="text-[11px] text-slate-400">${esc(rec.time || rec.created_at || '')}</span>
+            </div>`;
+        }).join('');
+      }
+
+      // 简介
+      document.getElementById('detail-intro').textContent =
+        introOf(book) || '暂无简介（后端 /api/books 没有返回简介字段）。';
+
+      // 读者评论
+      document.getElementById('detail-review-count').textContent = revs.length ? `共 ${revs.length} 条` : '';
+      const revBox = document.getElementById('detail-reviews');
+      if (revs.length === 0) {
+        revBox.innerHTML = `<p class="text-slate-400 text-xs py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">${
+          reviewsAvailable === false ? '后端未提供感悟接口（/api/thoughts）' : '还没有人评论这本书，来写第一条吧'}</p>`;
+      } else {
+        revBox.innerHTML = revs.map(rev => `
+          <div class="p-3 rounded-xl border border-slate-100 bg-slate-50">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-700"><i class="fa-solid fa-circle-user text-slate-300 mr-1"></i>${esc(rev.reviewer || rev.author || rev.user || '匿名读者')}</span>
+              <span class="text-[11px] text-slate-400">${esc(rev.time || '')}</span>
+            </div>
+            <p class="text-xs text-slate-600 leading-relaxed mt-1.5">${esc(rev.text || rev.content || '')}</p>
+          </div>`).join('');
+      }
+
+      document.getElementById('detail-reviewer-name').textContent = currentUser ? currentUser.name : '读者';
+    }
+
+    // 详情弹窗里发表评论 —— 走的还是 POST /api/thoughts
+    async function handleDetailReview(e) {
+      e.preventDefault();
+      const book = bookOfUid(currentDetailUid);
+      if (!book) return;
+
+      const text = document.getElementById('detail-review-text').value.trim();
+      if (!text) { alert('请填写评论内容！'); return; }
+
+      try {
+        const res = await fetch(API_BASE + "/thoughts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book: book.title, text: text })
+        });
+
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && (body.code === 0 || body.code === undefined)) {
+          document.getElementById('detail-review-text').value = '';
+          alert('评论发表成功！');
+          reviewsAvailable = null;
+          // 重新拉取感悟列表：内部会刷新弹窗里的评论列表和卡片上的评论数
+          await loadReviews();
+          renderBookDetail();
+        } else {
+          alert('提交失败：' + (body.msg || ('HTTP ' + res.status)));
+        }
+      } catch (err) {
+        alert('提交接口异常，请检查后端服务！');
+      }
+    }
+
+    // 渲染图书表格
+    function renderBooksTable() {
+      const filter = document.getElementById('filter-status').value;
+      let filtered = globalBooks;
+      if (filter !== 'all') {
+        filtered = globalBooks.filter(b => b.status === filter);
+      }
+
+      const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const start = (currentPage - 1) * pageSize;
+      const pageData = filtered.slice(start, start + pageSize);
+
+      const tbody = document.getElementById('book-list');
+      tbody.innerHTML = '';
+
+      if (pageData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">暂无图书数据</td></tr>`;
+      } else {
+        pageData.forEach(b => {
+          // status: "in" = 在架, "out" = 已借出
+          const statusBadge = b.status === 'in' 
+            ? `<span class="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded text-xs font-semibold">在架</span>`
+            : `<span class="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded text-xs font-semibold">已借出</span>`;
+
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-50 border-b border-slate-100">
+              <td class="p-3 font-mono text-xs text-slate-500">${esc(b.uid || '-')}</td>
+              <td class="p-3 font-bold text-slate-800">${esc(b.title || '未知书名')}</td>
+              <td class="p-3 text-slate-600">${esc(b.author || '未知作者')}</td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3 text-xs text-slate-400">${esc(b.borrow_time || lastTimeOf(b.uid) || '-')}</td>
+              <td class="p-3 text-right">
+                <button data-uid="${esc(String(b.uid))}"
+                  class="text-indigo-600 hover:text-indigo-900 font-medium text-xs">
+                  <i class="fa-solid fa-eye mr-1"></i>详情
+                </button>
+              </td>
+            </tr>
+          `;
+        });
+      }
+
+      document.getElementById('page-info').innerText = `第 ${currentPage} / ${totalPages} 页 (共 ${filtered.length} 条)`;
+    }
+
+    // 渲染借还记录动态
+    function renderRecordsList() {
+      const container = document.getElementById('records-list');
+      container.innerHTML = '';
+
+      // 借还记录里只有 uid，按 uid 到图书表里反查书名
+      const titleOf = uid => {
+        const hit = globalBooks.find(b => String(b.uid) === String(uid));
+        return hit ? hit.title : null;
+      };
+
+      if (!globalRecords || globalRecords.length === 0) {
+        container.innerHTML = recordsAvailable === false
+          ? `<p class="text-center text-slate-400 py-4">后端未提供该接口（/api/records）</p>`
+          : `<p class="text-center text-slate-400 py-4">暂无借还记录</p>`;
+        return;
+      }
+
+      // 筛选：全部 / 只看借出 / 只看归还（选框的值就是 action 的值）
+      const filterEl = document.getElementById('filter-record');
+      const filter = filterEl ? filterEl.value : 'all';
+      const matched = filter === 'all' ? globalRecords : globalRecords.filter(rec => rec.action === filter);
+
+      if (matched.length === 0) {
+        container.innerHTML = `<p class="text-center text-slate-400 py-4">该筛选下暂无记录</p>`;
+        return;
+      }
+
+      matched.slice(0, 50).forEach(rec => {
+        // action 只有 borrow / return 两种
+        const isIn = rec.action === 'return';
+        const actionTag = isIn 
+          ? `<span class="text-emerald-600 font-bold">[归还]</span>`
+          : `<span class="text-amber-600 font-bold">[借出]</span>`;
+
+        container.innerHTML += `
+          <div class="p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-center">
+            <div>
+              <div class="font-semibold text-slate-700">${actionTag} 《${esc(rec.title || rec.book || titleOf(rec.uid) || '未知图书')}》</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">UID: ${esc(rec.uid != null ? rec.uid : (rec.id != null ? rec.id : '-'))}</div>
+            </div>
+            <div class="text-[11px] text-slate-400">${esc(rec.time || rec.created_at || rec.updated_at || '')}</div>
+          </div>
+        `;
+      });
+    }
+
+    // 统计更新
+    function updateStats() {
+      document.getElementById('stat-total').innerText = globalBooks.length;
+      document.getElementById('stat-onshelf').innerText = globalBooks.filter(b => b.status === 'in').length;
+      document.getElementById('stat-borrowed').innerText = globalBooks.filter(b => b.status === 'out').length;
+      document.getElementById('stat-records').innerText = globalRecords.length;
+    }
+
+    // 翻页操作
+    function changePage(delta) {
+      currentPage += delta;
+      if (currentPage < 1) currentPage = 1;
+      renderBooksTable();
+    }
+  </script>
+</body>
+</html>

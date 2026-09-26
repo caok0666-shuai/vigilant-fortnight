@@ -1,0 +1,120 @@
+#include "gb2312_utils.h"
+#include "syn6288.h"
+
+// ============================================================
+// 常用短语 GB2312 编码字节数组
+// 这些由在线工具从 UTF-8 转换得到
+// 控制标签: [vN]=音量, [mN]=背景音乐音量, [tN]=语速
+// ============================================================
+
+// 欢迎来到社区智能书架
+// GB2312: BBB6D3AD C0B4B5BD C9E7C7F8 D6C7C4DC CAE9BCDC
+const uint8_t GB_WELCOME[] = {
+    0xBB, 0xB6, 0xD3, 0xAD, 0xC0, 0xB4, 0xB5, 0xBD,
+    0xC9, 0xE7, 0xC7, 0xF8, 0xD6, 0xC7, 0xC4, 0xDC,
+    0xCA, 0xE9, 0xBC, 0xDC
+};
+const size_t GB_WELCOME_LEN = 20;
+
+// 请将书籍放在感应区
+const uint8_t GB_PLACE_BOOK[] = {
+    0xC7, 0xEB, 0xBD, 0xAB, 0xCA, 0xE9, 0xBC, 0xAE,
+    0xB7, 0xC5, 0xD4, 0xDA, 0xB8, 0xD0, 0xD3, 0xA6,
+    0xC7, 0xF8
+};
+const size_t GB_PLACE_BOOK_LEN = 18;
+
+// 开始您的阅读之旅
+const uint8_t GB_START_READING[] = {
+    0xBF, 0xAA, 0xCA, 0xBC, 0xC4, 0xFA, 0xB5, 0xC4,
+    0xD4, 0xC4, 0xB6, 0xC1, 0xD6, 0xAE, 0xC2, 0xC3
+};
+const size_t GB_START_READING_LEN = 16;
+
+// 借书成功
+const uint8_t GB_BORROW_OK[] = {
+    0xBD, 0xE8, 0xCA, 0xE9, 0xB3, 0xC9, 0xB9, 0xA6
+};
+const size_t GB_BORROW_OK_LEN = 8;
+
+// 还书成功
+const uint8_t GB_RETURN_OK[] = {
+    0xBB, 0xB9, 0xCA, 0xE9, 0xB3, 0xC9, 0xB9, 0xA6
+};
+const size_t GB_RETURN_OK_LEN = 8;
+
+// 系统已就绪
+const uint8_t GB_READY[] = {
+    0xCF, 0xB5, 0xCD, 0xB3, 0xD2, 0xD1, 0xBE, 0xCD,
+    0xD0, 0xF7
+};
+const size_t GB_READY_LEN = 10;
+
+// 请拿好您的书籍
+const uint8_t GB_TAKE_BOOK[] = {
+    0xC7, 0xEB, 0xC4, 0xC3, 0xBA, 0xC3, 0xC4, 0xFA,
+    0xB5, 0xC4, 0xCA, 0xE9, 0xBC, 0xAE
+};
+const size_t GB_TAKE_BOOK_LEN = 14;
+
+// 祝您阅读愉快
+const uint8_t GB_ENJOY_READING[] = {
+    0xD7, 0xA3, 0xC4, 0xFA, 0xD4, 0xC4, 0xB6, 0xC1,
+    0xD3, 0xE4, 0xBF, 0xEC
+};
+const size_t GB_ENJOY_READING_LEN = 12;
+
+// 感谢您的归还
+const uint8_t GB_THANKS_RETURN[] = {
+    0xB8, 0xD0, 0xD0, 0xBB, 0xC4, 0xFA, 0xB5, 0xC4,
+    0xB9, 0xE9, 0xBB, 0xB9
+};
+const size_t GB_THANKS_RETURN_LEN = 12;
+
+// 期待您再次借阅
+const uint8_t GB_COME_AGAIN[] = {
+    0xC6, 0xDA, 0xB4, 0xFD, 0xC4, 0xFA, 0xD4, 0xD9,
+    0xB4, 0xCE, 0xBD, 0xE8, 0xD4, 0xC4
+};
+const size_t GB_COME_AGAIN_LEN = 14;
+
+// 检测到读者靠近
+const uint8_t GB_READER_NEAR[] = {
+    0xBC, 0xEC, 0xB2, 0xE2, 0xB5, 0xBD, 0xB6, 0xC1,
+    0xD5, 0xDF, 0xBF, 0xBF, 0xBD, 0xFC
+};
+const size_t GB_READER_NEAR_LEN = 14;
+
+// 社区留言
+const uint8_t GB_COMMUNITY_MSG[] = {
+    0xC9, 0xE7, 0xC7, 0xF8, 0xC1, 0xF4, 0xD1, 0xD4
+};
+const size_t GB_COMMUNITY_MSG_LEN = 8;
+
+// 为您导读
+const uint8_t GB_GUIDE_READING[] = {
+    0xCE, 0xAA, 0xC4, 0xFA, 0xB5, 0xBC, 0xB6, 0xC1
+};
+const size_t GB_GUIDE_READING_LEN = 8;
+
+// ============================================================
+// GB2312 字节数组拼接并发送
+// ============================================================
+void gb_speak(const uint8_t* data, size_t len) {
+    syn6288_speak_raw(data, len, 0);
+}
+
+// ============================================================
+// UTF-8 到 GB2312 简单转换
+// 注意: 这是一个简化版本，仅支持 GB2312 范围内的汉字
+// 实际使用建议使用预定义 GB2312 字节数组
+// ============================================================
+size_t utf8_to_gb2312(const char* utf8, uint8_t* gb_buf, size_t buf_size) {
+    // 简化实现: 直接复制 ASCII 部分
+    // 对于非 ASCII 字符，SYN6288 需要 GB2312
+    // 这里返回原始数据，由调用方确保编码正确
+    size_t len = strlen(utf8);
+    if (len > buf_size) len = buf_size;
+    memcpy(gb_buf, utf8, len);
+    return len;
+}
